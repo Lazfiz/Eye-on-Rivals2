@@ -251,6 +251,17 @@ export default function EyeOnRivalsLanding() {
         return "from-gray-500 to-gray-600"
     }
   }
+ 
+  // Color coding for Press Releases by competitor
+  const companyPressBorder = (name: string) => {
+    const n = name.toLowerCase()
+    if (n.includes("zeiss")) return "border-blue-500"
+    if (n.includes("topcon")) return "border-green-500"
+    if (n.includes("canon")) return "border-red-500"
+    if (n.includes("nidek")) return "border-orange-500"
+    if (n.includes("optovue")) return "border-purple-500"
+    return "border-blue-500"
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -648,7 +659,7 @@ export default function EyeOnRivalsLanding() {
                   selectedCompany.news.map((n, idx) => (
                     <div
                       key={idx}
-                      className={`border-l-4 pl-4 ${["border-red-500","border-blue-500","border-green-500","border-yellow-500","border-purple-500"][idx % 5]}`}
+                      className={`border-l-4 pl-4 ${companyPressBorder(selectedCompetitor.name)}`}
                     >
                       <h4 className="font-semibold text-blue-600">{n.Headline}</h4>
                       <p className="text-xs text-blue-600/80">{n.Date}</p>
