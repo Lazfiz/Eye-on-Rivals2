@@ -61,21 +61,68 @@ export async function POST(req: Request) {
     const candidateModels = [preferredModel, "gemini-2.5-flash"].filter(Boolean) as string[]
     
     const prompt = `
-You are a senior market analyst. Based on the following recent news articles about ${body.companyName ?? "the company"},
-produce:
-1) An executive summary (120–180 words)
-2) 3–5 concise bullet key takeaways
-3) A short Risks & Opportunities note (2–3 sentences)
-Be specific, avoid generic phrases, and reflect only what is supported by the articles.
-`
+ You are a concise market analyst. Using ONLY the content below about ${body.companyName ?? "the company"}, write a tweet-length update:
+ - Output EXACTLY 3 bullet points (or fewer if there is not enough evidence)
+ - Total length MUST be ≤ 280 characters (all bullets combined)
+ - Each bullet must be short, specific, and supported by the articles
+ - No title/preface, no hashtags, no emojis, no links, no filler, no speculation
+ `
 
     let lastErr: any = null
     for (const m of candidateModels) {
       try {
         const model = genAI.getGenerativeModel({ model: m })
         const result = await model.generateContent([{ text: prompt }, { text: combined }])
-        const summary = result.response.text()
-        return NextResponse.json({ summary, model: m })
+        const raw = result.response.text() || ""
+
+        // Post-process: keep up to 3 concise bullets and ensure <= 280 chars total
+        const bullets = raw
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((s) => s.replace(/^[\-\*\u2022]\s*/, "")) // strip leading bullet markers like -, *, •
+          .filter((s) => s.length > 0)
+          .slice(0, 3)
+
+        function joinBullets(parts: string[]) {
+          return parts.join("\n")
+        }
+
+        let out = joinBullets(bullets)
+
+        if (out.length > 280) {
+          // Try trimming the 3rd bullet first
+          const first = bullets[0] ?? ""
+          let second = bullets[1] ?? ""
+          let third = bullets[2] ?? ""
+
+          // Trim third until it fits or drop it
+          while ((joinBullets([first, second, third]).length > 280) && third.length > 0) {
+            third = third.slice(0, Math.max(0, third.length - 5)).trimEnd()
+          }
+          let candidate = third ? joinBullets([first, second, third]) : joinBullets([first, second])
+
+          // If still too long, trim second as well
+          if (candidate.length > 280) {
+            while ((joinBullets([first, second]).length > 280) && second.length > 0) {
+              second = second.slice(0, Math.max(0, second.length - 5)).trimEnd()
+            }
+            candidate = joinBullets([first, second]).trim()
+          }
+
+          // If still too long, fall back to just first (trimmed)
+          if (candidate.length > 280) {
+            let firstTrim = first
+            while (firstTrim.length > 280) {
+              firstTrim = firstTrim.slice(0, Math.max(0, firstTrim.length - 5)).trimEnd()
+            }
+            candidate = firstTrim
+          }
+
+          out = candidate
+        }
+
+        return NextResponse.json({ summary: out, model: m })
       } catch (e: any) {
         const msg = e?.message || ""
         // If model not found/unsupported, try the next one
