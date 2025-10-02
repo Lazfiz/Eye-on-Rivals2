@@ -263,6 +263,13 @@ export default function EyeOnRivalsLanding() {
     return "border-blue-500"
   }
 
+  const pressOrder = ["Zeiss","Topcon","Nidek","Canon","Optovue"]
+  const pressEntries: { name: string; item?: NewsItem }[] = pressOrder.map((name) => {
+    const company = companyData.find((c) => c.name.toLowerCase().includes(name.toLowerCase()))
+    const item = company?.news?.[0]
+    return { name, item }
+  })
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -655,22 +662,29 @@ export default function EyeOnRivalsLanding() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {selectedCompany && selectedCompany.news.length > 0 ? (
-                  selectedCompany.news.map((n, idx) => (
-                    <div
-                      key={idx}
-                      className={`border-l-4 pl-4 ${companyPressBorder(selectedCompetitor.name)}`}
-                    >
-                      <h4 className="font-semibold text-blue-600">{n.Headline}</h4>
-                      <p className="text-xs text-blue-600/80">{n.Date}</p>
-                      <a href={n.URL} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
-                        View press release
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-blue-600/80">No press releases available.</p>
-                )}
+                {pressEntries.map(({ name, item }) => (
+                  <div
+                    key={name}
+                    className={`border-l-4 pl-4 ${companyPressBorder(name)}`}
+                  >
+                    <h4 className="font-semibold text-blue-600">
+                      {item ? item.Headline : `${name}: No press releases available.`}
+                    </h4>
+                    {item && (
+                      <>
+                        <p className="text-xs text-blue-600/80">{item.Date}</p>
+                        <a
+                          href={item.URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 underline"
+                        >
+                          View press release
+                        </a>
+                      </>
+                    )}
+                  </div>
+                ))}
               </CardContent>
             </Card>
 
