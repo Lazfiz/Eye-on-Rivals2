@@ -633,23 +633,23 @@ export default function EyeOnRivalsLanding() {
               <CardHeader>
                 <CardTitle className="flex items-center text-blue-600">
                   <FileText className="w-5 h-5 mr-2" />
-                  White Papers
+                  Patents
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {selectedCompany && selectedCompany.whitePapers.length > 0 ? (
-                  selectedCompany.whitePapers.map((wp, idx) => (
+                {selectedCompany && selectedCompany.patents.length > 0 ? (
+                  selectedCompany.patents.map((p, idx) => (
                     <div key={idx} className="border-l-4 border-blue-500 pl-4">
-                      <h4 className="font-semibold text-blue-600">{wp.Title}</h4>
-                      <p className="text-sm text-blue-600/80">{wp.Abstract}</p>
-                      <p className="text-xs text-blue-600/80">{wp.Date}</p>
-                      <a href={wp.URL} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
-                        Read white paper
+                      <h4 className="font-semibold text-blue-600">{p.Title}</h4>
+                      <p className="text-sm text-blue-600/80">{p.Abstract}</p>
+                      <p className="text-xs text-blue-600/80">{p.Date}</p>
+                      <a href={p.URL} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
+                        View patent
                       </a>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-blue-600/80">No white papers available.</p>
+                  <p className="text-sm text-blue-600/80">No patents available.</p>
                 )}
               </CardContent>
             </Card>
@@ -668,7 +668,7 @@ export default function EyeOnRivalsLanding() {
                     className={`border-l-4 pl-4 ${companyPressBorder(name)}`}
                   >
                     <h4 className="font-semibold text-blue-600">
-                      {item ? item.Headline : `${name}: No press releases available.`}
+                      {item ? `${name}. ${item.Headline}` : `${name}. No press releases available.`}
                     </h4>
                     {item && (
                       <>
