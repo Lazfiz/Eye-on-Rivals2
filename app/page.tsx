@@ -30,6 +30,7 @@ import {
   Award,
   Flame,
 } from "lucide-react"
+import Link from "next/link"
 
 const competitors = [
   {
@@ -202,9 +203,6 @@ export default function EyeOnRivalsLanding() {
   const [selectedCompetitor, setSelectedCompetitor] = useState(competitors[0])
   const [gamifiedMode, setGamefiedMode] = useState(false)
   const [companyData, setCompanyData] = useState<CompanyData[]>([])
-  const [summary, setSummary] = useState<string>("")
-  const [summarizing, setSummarizing] = useState(false)
-  const [summaryError, setSummaryError] = useState<string | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -230,31 +228,6 @@ export default function EyeOnRivalsLanding() {
     (c) => c.name.toLowerCase() === selectedCompetitor.name.toLowerCase()
   )
 
-  async function summarizeNews() {
-    try {
-      setSummarizing(true)
-      setSummaryError(null)
-      setSummary("")
-      const urls = (selectedCompany?.news ?? []).map((n) => n.URL).filter(Boolean)
-      if (urls.length === 0) {
-        setSummaryError("No news URLs available to summarize.")
-        setSummarizing(false)
-        return
-      }
-      const res = await fetch("/api/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ urls, companyName: selectedCompetitor.name }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || "Failed to summarize")
-      setSummary(json.summary || "No summary returned.")
-    } catch (e: any) {
-      setSummaryError(e.message)
-    } finally {
-      setSummarizing(false)
-    }
-  }
 
   const getThreatLevel = (score: number) => {
     if (score >= 80) return { level: "Critical", color: "bg-red-500" }
@@ -293,18 +266,18 @@ export default function EyeOnRivalsLanding() {
               </div>
             </div>
             <nav className="hidden md:flex items-center space-x-6">
-              <a href="#dashboard" className="text-white hover:text-white/80 transition-colors">
+              <Link href="/" className="text-white hover:text-white/80 transition-colors">
                 Dashboard
-              </a>
+              </Link>
               <a href="#competitors" className="text-white hover:text-white/80 transition-colors">
                 Competitors
               </a>
               <a href="#insights" className="text-white hover:text-white/80 transition-colors">
                 Insights
               </a>
-              <a href="#reports" className="text-white hover:text-white/80 transition-colors">
+              <Link href="/reports" className="text-white hover:text-white/80 transition-colors">
                 Reports
-              </a>
+              </Link>
             </nav>
             <div className="flex items-center space-x-3">
               <Button
@@ -665,32 +638,12 @@ export default function EyeOnRivalsLanding() {
 
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center text-blue-600">
-                    <FileText className="w-5 h-5 mr-2" />
-                    Press Releases
-                  </CardTitle>
-                  <Button
-                    size="sm"
-                    onClick={summarizeNews}
-                    className="bg-blue-500 text-white hover:bg-blue-600"
-                    disabled={summarizing || !(selectedCompany && selectedCompany.news.length > 0)}
-                  >
-                    {summarizing ? "Summarizing..." : "Summarize News"}
-                  </Button>
-                </div>
+                <CardTitle className="flex items-center text-blue-600">
+                  <FileText className="w-5 h-5 mr-2" />
+                  Press Releases
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {summaryError && (
-                  <div className="text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
-                    {summaryError}
-                  </div>
-                )}
-                {summary && (
-                  <div className="p-4 rounded border border-blue-200 bg-blue-50 text-blue-700 whitespace-pre-wrap">
-                    {summary}
-                  </div>
-                )}
                 {selectedCompany && selectedCompany.news.length > 0 ? (
                   selectedCompany.news.map((n, idx) => (
                     <div
