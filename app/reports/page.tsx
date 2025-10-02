@@ -21,7 +21,7 @@ type CompetitorJson = {
 
 type ApiData = { Competitor: CompetitorJson[] }
 
-const TARGET_COMPETITORS = ["Zeiss", "Topcon", "Nidek", "Canon", "Heidelberg"]
+const TARGET_COMPETITORS = ["Zeiss", "Topcon", "Nidek", "Canon", "Optovue"]
 
 export default function ReportsPage() {
   const [data, setData] = useState<CompetitorJson[]>([])

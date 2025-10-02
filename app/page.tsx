@@ -140,7 +140,7 @@ const competitors = [
   },
   {
     id: 5,
-    name: "Heidelberg Engineering",
+    name: "Optovue",
     threatScore: 64,
     marketShare: 5, // Reduced from 15 to accommodate Optos
     recentActivity: "Low",

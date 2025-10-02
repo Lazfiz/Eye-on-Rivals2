@@ -19,6 +19,33 @@ function stripHtml(html: string): string {
     .trim()
 }
 
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function generateWithRetry(model: any, prompt: string, combined: string) {
+  let lastErr: any = null
+  const delays = [500, 1000, 2000] // exponential-ish backoff
+  for (let i = 0; i < delays.length; i++) {
+    try {
+      const result = await model.generateContent([{ text: prompt }, { text: combined }])
+      const raw = result.response.text() || ""
+      return raw
+    } catch (e: any) {
+      const msg = e?.message || ""
+      // Retry on transient overloads
+      if (e?.status === 503 || /overloaded|Service Unavailable/i.test(msg)) {
+        lastErr = e
+        await sleep(delays[i])
+        continue
+      }
+      // Non-retryable error
+      throw e
+    }
+  }
+  throw lastErr || new Error("Model overloaded; retries exhausted")
+}
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY
@@ -72,16 +99,15 @@ export async function POST(req: Request) {
     for (const m of candidateModels) {
       try {
         const model = genAI.getGenerativeModel({ model: m })
-        const result = await model.generateContent([{ text: prompt }, { text: combined }])
-        const raw = result.response.text() || ""
+        const raw = await generateWithRetry(model, prompt, combined)
 
         // Post-process: keep up to 3 concise bullets and ensure <= 280 chars total
         const bullets = raw
           .split(/\r?\n/)
-          .map((s) => s.trim())
+          .map((s: string) => s.trim())
           .filter(Boolean)
-          .map((s) => s.replace(/^[\-\*\u2022]\s*/, "")) // strip leading bullet markers like -, *, •
-          .filter((s) => s.length > 0)
+          .map((s: string) => s.replace(/^[\-\*\u2022]\s*/, "")) // strip leading bullet markers like -, *, •
+          .filter((s: string) => s.length > 0)
           .slice(0, 3)
 
         function joinBullets(parts: string[]) {
