@@ -1,0 +1,33 @@
+{
+    "Competitor" : [
+        {
+            "Name" : "Zeiss",
+            "News" : [
+                {"Date" : "02/10/2025", "Headline" : "Zeiss complains sun too bright", "URL" : "https://www.zeiss.com/semiconductor-manufacturing-technology/news-and-events/smt-press-releases/2025/new-cleanrooms-rossdorf.html"},
+                {"Date" : "01/10/2025", "Headline" : "Zeiss complains sun too dim", "URL" : "https://www.zeiss.com/microscopy/en/about-us/newsroom/press-releases/2025/multiplex-immunofluorescence-chemistries.html"}
+
+            ],
+            "Job Listings" : [
+                {"Date" : "02/10/2025", "Job Title" : "Chief Jedi", "URL" : "https://zeissgroup.wd3.myworkdayjobs.com/External/job/Oberkochen/XMLNAME--Senior--Manager-Change---Communication---Customer-Excellence---NextGenCRM--m-f-d-_JR_1043317-3"}
+            ],
+            "White Papers" : [
+                {"Date" : "02/10/1999", "Title" : "Old Man Yells At Cloud!", "Abstract" : "Who's laughing now?", "URL" : "https://www.zeiss.co.uk/metrology/software/zeiss-inspect/features/gd-and-t/white-paper-geometric-dimensioning-and-tolerancing.html"}
+            ],
+            "Patents" : 
+            [
+                {"Date" : "01/02/1910", "Title" : "Faster Horses", "Abstract" : "Some abstract here!", "URL" : "https://patents.google.com/patent/US5867246A/3Den"}
+            ]   
+        },
+        {
+            "Name" : "Optovue",
+            "News" : [
+            ] ,
+            "Job Listings" : [
+            ],
+            "White Papers" : [
+            ],
+            "Patents" : [
+            ]   
+        }
+    ]
+}

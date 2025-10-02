@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -186,9 +186,46 @@ const marketShareData = [
 
 const COLORS = ["#2563eb", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
 
+type NewsItem = { Date: string; Headline: string; URL: string }
+type JobItem = { Date: string; "Job Title": string; URL: string }
+type WhitePaper = { Date: string; Title: string; Abstract: string; URL: string }
+type Patent = { Date: string; Title: string; Abstract: string; URL: string }
+type CompanyData = {
+  name: string
+  news: NewsItem[]
+  jobListings: JobItem[]
+  whitePapers: WhitePaper[]
+  patents: Patent[]
+}
+
 export default function EyeOnRivalsLanding() {
   const [selectedCompetitor, setSelectedCompetitor] = useState(competitors[0])
   const [gamifiedMode, setGamefiedMode] = useState(false)
+  const [companyData, setCompanyData] = useState<CompanyData[]>([])
+
+  useEffect(() => {
+    let isMounted = true
+    fetch("/api/competitors")
+      .then((res) => res.json())
+      .then((data) => {
+        const mapped: CompanyData[] = (data?.Competitor ?? []).map((c: any) => ({
+          name: c.Name,
+          news: c.News ?? [],
+          jobListings: c["Job Listings"] ?? [],
+          whitePapers: c["White Papers"] ?? [],
+          patents: c.Patents ?? [],
+        }))
+        if (isMounted) setCompanyData(mapped)
+      })
+      .catch((err) => console.error("Failed to load competitors", err))
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const selectedCompany = companyData.find(
+    (c) => c.name.toLowerCase() === selectedCompetitor.name.toLowerCase()
+  )
 
   const getThreatLevel = (score: number) => {
     if (score >= 80) return { level: "Critical", color: "bg-red-500" }
@@ -575,36 +612,25 @@ export default function EyeOnRivalsLanding() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-blue-600">
-                  <Briefcase className="w-5 h-5 mr-2" />
-                  Product Updates
+                  <FileText className="w-5 h-5 mr-2" />
+                  White Papers
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Zeiss OCT Update</h4>
-                  <p className="text-sm text-blue-600/80">New AI-powered analysis features</p>
-                  <p className="text-xs text-blue-600/80">2 days ago</p>
-                </div>
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Canon Fundus Camera</h4>
-                  <p className="text-sm text-blue-600/80">Enhanced imaging capabilities</p>
-                  <p className="text-xs text-blue-600/80">1 week ago</p>
-                </div>
-                <div className="border-l-4 border-yellow-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Topcon Software Suite</h4>
-                  <p className="text-sm text-blue-600/80">Cloud integration announced</p>
-                  <p className="text-xs text-blue-600/80">2 weeks ago</p>
-                </div>
-                <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Heidelberg Expansion</h4>
-                  <p className="text-sm text-blue-600/80">New facility in Asia announced</p>
-                  <p className="text-xs text-blue-600/80">2 weeks ago</p>
-                </div>
-                <div className="border-l-4 border-yellow-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Nidek Rapid Development</h4>
-                  <p className="text-sm text-blue-600/80">New product development initiatives</p>
-                  <p className="text-xs text-blue-600/80">3 weeks ago</p>
-                </div>
+                {selectedCompany && selectedCompany.whitePapers.length > 0 ? (
+                  selectedCompany.whitePapers.map((wp, idx) => (
+                    <div key={idx} className="border-l-4 border-blue-500 pl-4">
+                      <h4 className="font-semibold text-blue-600">{wp.Title}</h4>
+                      <p className="text-sm text-blue-600/80">{wp.Abstract}</p>
+                      <p className="text-xs text-blue-600/80">{wp.Date}</p>
+                      <a href={wp.URL} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
+                        Read white paper
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-blue-600/80">No white papers available.</p>
+                )}
               </CardContent>
             </Card>
 
@@ -616,31 +642,22 @@ export default function EyeOnRivalsLanding() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="border-l-4 border-red-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Canon Q3 Results</h4>
-                  <p className="text-sm text-blue-600/80">Strong growth in medical imaging</p>
-                  <p className="text-xs text-blue-600/80">3 days ago</p>
-                </div>
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Zeiss Partnership</h4>
-                  <p className="text-sm text-blue-600/80">Strategic alliance with tech startup</p>
-                  <p className="text-xs text-blue-600/80">1 week ago</p>
-                </div>
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Topcon Cloud Integration</h4>
-                  <p className="text-sm text-blue-600/80">Topcon announces cloud integration</p>
-                  <p className="text-xs text-blue-600/80">2 weeks ago</p>
-                </div>
-                <div className="border-l-4 border-yellow-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Nidek Tech Evolution</h4>
-                  <p className="text-sm text-blue-600/80">Nidek focuses on tech evolution</p>
-                  <p className="text-xs text-blue-600/80">3 weeks ago</p>
-                </div>
-                <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Heidelberg Expansion</h4>
-                  <p className="text-sm text-blue-600/80">New facility in Asia announced</p>
-                  <p className="text-xs text-blue-600/80">2 weeks ago</p>
-                </div>
+                {selectedCompany && selectedCompany.news.length > 0 ? (
+                  selectedCompany.news.map((n, idx) => (
+                    <div
+                      key={idx}
+                      className={`border-l-4 pl-4 ${["border-red-500","border-blue-500","border-green-500","border-yellow-500","border-purple-500"][idx % 5]}`}
+                    >
+                      <h4 className="font-semibold text-blue-600">{n.Headline}</h4>
+                      <p className="text-xs text-blue-600/80">{n.Date}</p>
+                      <a href={n.URL} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
+                        View press release
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-blue-600/80">No press releases available.</p>
+                )}
               </CardContent>
             </Card>
 
@@ -652,31 +669,22 @@ export default function EyeOnRivalsLanding() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Senior AI Engineer</h4>
-                  <p className="text-sm text-blue-600/80">Zeiss - Medical Imaging Division</p>
-                  <p className="text-xs text-blue-600/80">Posted today</p>
-                </div>
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Product Manager</h4>
-                  <p className="text-sm text-blue-600/80">Canon - Healthcare Solutions</p>
-                  <p className="text-xs text-blue-600/80">2 days ago</p>
-                </div>
-                <div className="border-l-4 border-yellow-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">R&D Director</h4>
-                  <p className="text-sm text-blue-600/80">Topcon - Innovation Lab</p>
-                  <p className="text-xs text-blue-600/80">5 days ago</p>
-                </div>
-                <div className="border-l-4 border-purple-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Market Analyst</h4>
-                  <p className="text-sm text-blue-600/80">Heidelberg Engineering - Market Analysis Team</p>
-                  <p className="text-xs text-blue-600/80">2 weeks ago</p>
-                </div>
-                <div className="border-l-4 border-yellow-500 pl-4">
-                  <h4 className="font-semibold text-blue-600">Technical Support Engineer</h4>
-                  <p className="text-sm text-blue-600/80">Nidek - Technical Support</p>
-                  <p className="text-xs text-blue-600/80">3 weeks ago</p>
-                </div>
+                {selectedCompany && selectedCompany.jobListings.length > 0 ? (
+                  selectedCompany.jobListings.map((job, idx) => (
+                    <div
+                      key={idx}
+                      className={`border-l-4 pl-4 ${["border-green-500","border-blue-500","border-yellow-500","border-purple-500","border-red-500"][idx % 5]}`}
+                    >
+                      <h4 className="font-semibold text-blue-600">{job["Job Title"]}</h4>
+                      <p className="text-xs text-blue-600/80">{job.Date}</p>
+                      <a href={job.URL} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
+                        View job posting
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-blue-600/80">No job postings available.</p>
+                )}
               </CardContent>
             </Card>
           </div>
