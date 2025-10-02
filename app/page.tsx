@@ -191,6 +191,7 @@ type NewsItem = { Date: string; Headline: string; URL: string }
 type JobItem = { Date: string; "Job Title": string; URL: string }
 type WhitePaper = { Date: string; Title: string; Abstract: string; URL: string }
 type Patent = { Date: string; Title: string; Abstract: string; URL: string }
+type PatentLite = { Title: string; Date: string; URL: string }
 type CompanyData = {
   name: string
   news: NewsItem[]
@@ -203,7 +204,8 @@ export default function EyeOnRivalsLanding() {
   const [selectedCompetitor, setSelectedCompetitor] = useState(competitors[0])
   const [gamifiedMode, setGamefiedMode] = useState(false)
   const [companyData, setCompanyData] = useState<CompanyData[]>([])
-
+  const [patentsByCompany, setPatentsByCompany] = useState<Record<string, PatentLite[]>>({})
+ 
   useEffect(() => {
     let isMounted = true
     fetch("/api/competitors")
@@ -223,6 +225,30 @@ export default function EyeOnRivalsLanding() {
       isMounted = false
     }
   }, [])
+
+  // Load patents from dedicated JSON files per competitor
+  useEffect(() => {
+    let mounted = true
+    fetch("/api/patents")
+      .then((res) => res.json())
+      .then((json) => {
+        const map = (json?.patentsByCompany ?? {}) as Record<string, PatentLite[]>
+        if (mounted) setPatentsByCompany(map)
+      })
+      .catch(() => {
+        if (mounted) setPatentsByCompany({})
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // Helper to fetch patents for a competitor (case-insensitive)
+  function getPatentsFor(name: string): PatentLite[] {
+    const entries = Object.entries(patentsByCompany)
+    const found = entries.find(([k]) => k.toLowerCase() === name.toLowerCase())
+    return found ? found[1] : []
+  }
 
   const selectedCompany = companyData.find(
     (c) => c.name.toLowerCase() === selectedCompetitor.name.toLowerCase()
@@ -267,6 +293,13 @@ export default function EyeOnRivalsLanding() {
   const pressEntries: { name: string; item?: NewsItem }[] = pressOrder.map((name) => {
     const company = companyData.find((c) => c.name.toLowerCase().includes(name.toLowerCase()))
     const item = company?.news?.[0]
+    return { name, item }
+  })
+
+  // One patent per competitor (first item), to mirror Press Releases widget
+  const patentsEntries: { name: string; item?: PatentLite }[] = pressOrder.map((name) => {
+    const list = getPatentsFor(name)
+    const item = list?.[0]
     return { name, item }
   })
 
@@ -637,20 +670,22 @@ export default function EyeOnRivalsLanding() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {selectedCompany && selectedCompany.patents.length > 0 ? (
-                  selectedCompany.patents.map((p, idx) => (
-                    <div key={idx} className="border-l-4 border-blue-500 pl-4">
-                      <h4 className="font-semibold text-blue-600">{p.Title}</h4>
-                      <p className="text-sm text-blue-600/80">{p.Abstract}</p>
-                      <p className="text-xs text-blue-600/80">{p.Date}</p>
-                      <a href={p.URL} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
-                        View patent
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-blue-600/80">No patents available.</p>
-                )}
+                {patentsEntries.map(({ name, item }) => (
+                  <div
+                    key={name}
+                    className={`border-l-4 pl-4 ${companyPressBorder(name)}`}
+                  >
+                    <h4 className="font-semibold text-blue-600">
+                      {item ? `${name}. ${item.Title}` : `${name}. No patents available.`}
+                    </h4>
+                    {item && (
+                      <>
+                        <p className="text-xs text-blue-600/80">{item.Date}</p>
+                        <p className="text-xs text-blue-600 break-all">{item.URL}</p>
+                      </>
+                    )}
+                  </div>
+                ))}
               </CardContent>
             </Card>
 
