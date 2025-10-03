@@ -1,0 +1,35 @@
+{
+  "companies": [
+    {
+      "name": "Zeiss",
+      "revenueUSD": 600,
+      "products": 5,
+      "patents": 350
+    },
+    {
+      "name": "Canon",
+      "revenueUSD": 200,
+      "products": 6,
+      "patents": 250
+    },
+    {
+      "name": "Optovue",
+      "revenueUSD": 220,
+      "products": 4,
+      "patents": 180
+    },
+    {
+      "name": "Topcon",
+      "revenueUSD": 450,
+      "products": 9,
+      "patents": 300
+    },
+    {
+      "name": "Nidek",
+      "revenueUSD": 180,
+      "products": 7,
+      "patents": 200
+    }
+  ],
+  "updatedAt": "2025-10-03T04:00:39.856Z"
+}
