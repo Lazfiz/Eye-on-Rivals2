@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -333,6 +333,33 @@ function getCompanyActivityFor(companyData: CompanyData[], name: string) {
   return { newsThisYear, patentsThisYear, jobsThisYear, total, label };
 }
 
+// Value normalizers for threat score
+function parseRevenueString(input?: string): number {
+  if (!input) return 0;
+  const cleaned = String(input).replace(/\$/g, "").trim();
+  const m = cleaned.match(/([\d.,]+)\s*([KMBT])?/i);
+  if (!m) return 0;
+  const num = parseFloat(m[1].replace(/,/g, ""));
+  const unit = (m[2] || "").toUpperCase();
+  const mult =
+    unit === "T" ? 1e12 :
+    unit === "B" ? 1e9  :
+    unit === "M" ? 1e6  :
+    unit === "K" ? 1e3  : 1;
+  return (isFinite(num) ? num : 0) * mult;
+}
+
+function activityScoreFromLabel(label: string): number {
+  const l = (label || "").toLowerCase();
+  if (l.includes("very high")) return 1.0;
+  if (l.includes("high")) return 0.8;
+  if (l.includes("medium")) return 0.6;
+  if (l.includes("low") && !l.includes("very")) return 0.4;
+  if (l.includes("very low")) return 0.2;
+  // fallback
+  return 0.4;
+}
+
 export default function EyeOnRivalsLanding() {
   const [selectedCompetitor, setSelectedCompetitor] = useState(competitors[0])
   const [gamifiedMode, setGamefiedMode] = useState(false)
@@ -353,7 +380,45 @@ export default function EyeOnRivalsLanding() {
   const [rtUpdatedAt, setRtUpdatedAt] = useState<string | null>(null)
   const [rtLoading, setRtLoading] = useState(false)
   const [rtError, setRtError] = useState<string | null>(null)
- 
+  
+  const computedThreatMap = useMemo(() => {
+    try {
+      const rows = competitors.map((comp) => {
+        const name = comp.name;
+        const lower = name.toLowerCase();
+        const revenue = rtStats[lower]?.revenueUSD ?? parseRevenueString(comp.revenue) ?? 0;
+        const products = rtStats[lower]?.products ?? comp.products ?? 0;
+        const patents = rtStats[lower]?.patents ?? comp.patents ?? 0;
+        const marketShare = (msData.find(d => d.name.toLowerCase() === lower)?.value) ?? comp.marketShare ?? 0;
+        const activityLabel = getCompanyActivityFor(companyData, name).label;
+        const activity = activityScoreFromLabel(activityLabel);
+        return { name, revenue, products, patents, marketShare, activity };
+      });
+
+      if (!rows.length) return {} as Record<string, number>;
+
+      const maxRevenue = Math.max(1, ...rows.map(r => r.revenue));
+      const maxProducts = Math.max(1, ...rows.map(r => r.products));
+      const maxPatents = Math.max(1, ...rows.map(r => r.patents));
+      const maxMarket = Math.max(1, ...rows.map(r => r.marketShare));
+
+      const map: Record<string, number> = {};
+      rows.forEach(r => {
+        const score = 100 * (
+          0.25 * (r.revenue / maxRevenue) +
+          0.15 * (r.products / maxProducts) +
+          0.15 * (r.patents / maxPatents) +
+          0.30 * (r.marketShare / maxMarket) +
+          0.15 * (r.activity)
+        );
+        map[r.name] = Math.round(score);
+      });
+      return map;
+    } catch {
+      return {} as Record<string, number>;
+    }
+  }, [companyData, msData, rtStats])
+
   useEffect(() => {
     let isMounted = true
     fetch("/api/competitors")
@@ -725,7 +790,8 @@ export default function EyeOnRivalsLanding() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
             {competitors.map((competitor) => {
-              const threat = getThreatLevel(competitor.threatScore)
+              const computedThreat = computedThreatMap[competitor.name] ?? competitor.threatScore
+              const threat = getThreatLevel(computedThreat)
               const act = getCompanyActivityFor(companyData, competitor.name)
 
               if (gamifiedMode) {
@@ -842,9 +908,9 @@ export default function EyeOnRivalsLanding() {
                     <div>
                       <div className="flex justify-between text-sm mb-1 text-blue-600/80">
                         <span>Threat Score</span>
-                        <span className="font-semibold text-blue-600">{competitor.threatScore}/100</span>
+                        <span className="font-semibold text-blue-600">{(computedThreat).toFixed(0)}/100</span>
                       </div>
-                      <Progress value={competitor.threatScore} className="h-2" />
+                      <Progress value={computedThreat} className="h-2" />
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
@@ -874,9 +940,13 @@ export default function EyeOnRivalsLanding() {
                         </p>
                       </div>
                     </div>
-                    <Badge variant="outline" className="w-full justify-center text-blue-600/80">
+                    <Badge
+                      variant="outline"
+                      className="w-full justify-center text-blue-600/80"
+                      title={`News ${act.newsThisYear} • Patents ${act.patentsThisYear} • Jobs ${act.jobsThisYear}`}
+                    >
                       <Activity className="w-3 h-3 mr-1" />
-                      {act.label} Activity
+                      {act.label.toLowerCase()} activity
                     </Badge>
                   </CardContent>
                 </Card>
