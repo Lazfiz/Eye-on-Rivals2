@@ -637,16 +637,27 @@ export default function EyeOnRivalsLanding() {
     }
   }
  
-  // Color coding for Press Releases by competitor
-  const companyPressBorder = (name: string) => {
-    const n = name.toLowerCase()
-    if (n.includes("zeiss")) return "border-blue-500"
-    if (n.includes("topcon")) return "border-green-500"
-    if (n.includes("canon")) return "border-red-500"
-    if (n.includes("nidek")) return "border-orange-500"
-    if (n.includes("optovue")) return "border-purple-500"
-    return "border-blue-500"
-  }
+    // Color coding for Press Releases by competitor
+    const companyPressBorder = (name: string) => {
+      const n = name.toLowerCase()
+      if (n.includes("zeiss")) return "border-blue-500"
+      if (n.includes("topcon")) return "border-green-500"
+      if (n.includes("canon")) return "border-red-500"
+      if (n.includes("nidek")) return "border-orange-500"
+      if (n.includes("optovue")) return "border-purple-500"
+      return "border-blue-500"
+    }
+  
+    // Map competitor to card image stored in /public, with known filenames
+    const getCardImageFor = (name: string) => {
+      const n = name.toLowerCase()
+      if (n.includes("canon")) return "/canon_card.png"
+      if (n.includes("zeiss")) return "/zeiss_card.png"
+      if (n.includes("nidek")) return "/nidek_card.png"
+      if (n.includes("topcon")) return "/topcon_card.png"
+      if (n.includes("optovue")) return "/optovue_card.png"
+      return "/placeholder.jpg"
+    }
 
   const pressOrder = ["Zeiss","Topcon","Nidek","Canon","Optovue"]
   const pressEntries: { name: string; item?: NewsItem }[] = pressOrder.map((name) => {
@@ -805,83 +816,18 @@ export default function EyeOnRivalsLanding() {
                     }`}
                     onClick={() => setSelectedCompetitor(competitor)}
                   >
-                    {/* Pokemon-style gradient background */}
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-br ${getRarityColor(competitor.rarity)} opacity-10`}
-                    />
-
-                    <CardHeader className="pb-2 relative z-10">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-2xl">{competitor.element}</span>
-                          <Badge variant="secondary" className={`${competitor.color} text-white text-xs`}>
-                            LV.{competitor.level}
-                          </Badge>
-                        </div>
-                        <Badge variant="outline" className="text-xs font-bold text-blue-600/80">
-                          {competitor.rarity}
-                        </Badge>
-                      </div>
-                      <CardTitle className="text-lg font-bold text-blue-600">{competitor.name}</CardTitle>
-                      <p className="text-xs text-blue-600/80 italic">"{competitor.battleCry}"</p>
-                    </CardHeader>
-
-                    <CardContent className="space-y-3 relative z-10">
-                      {/* HP Bar */}
-                      <div>
-                        <div className="flex justify-between text-xs mb-1 text-blue-600/80">
-                          <span className="font-semibold text-red-600">HP</span>
-                          <span className="font-mono text-blue-600">
-                            {competitor.hp}/{competitor.maxHp}
-                          </span>
-                        </div>
-                        <Progress value={(competitor.hp / competitor.maxHp) * 100} className="h-2 bg-red-100" />
-                      </div>
-
-                      {/* Battle Stats */}
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-blue-600/80">ATK</span>
-                          <span className="font-bold text-red-600">{competitor.attack}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-blue-600/80">DEF</span>
-                          <span className="font-bold text-blue-600">{competitor.defense}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-blue-600/80">SPD</span>
-                          <span className="font-bold text-green-600">{competitor.speed}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-blue-600/80">SPC</span>
-                          <span className="font-bold text-purple-600">{competitor.special}</span>
-                        </div>
-                      </div>
-
-                      {/* Type and Threat */}
-                      <div className="flex justify-between items-center">
-                        <Badge variant="outline" className="text-xs text-blue-600/80">
-                          {competitor.type}
-                        </Badge>
-                        <Badge className={`${threat.color} text-white text-xs`}>
-                          <Flame className="w-3 h-3 mr-1" />
-                          {threat.level}
-                        </Badge>
-                      </div>
-
-                      {/* Market Share as Power Level */}
-                      <div>
-                        <div className="flex justify-between text-xs mb-1 text-blue-600/80">
-                          <span className="font-semibold">Power Level</span>
-                          <span className="font-mono text-blue-600">
-                            {(msData.find(d => d.name.toLowerCase() === competitor.name.toLowerCase())?.value ?? competitor.marketShare)}%
-                          </span>
-                        </div>
-                        <Progress
-                          value={(msData.find(d => d.name.toLowerCase() === competitor.name.toLowerCase())?.value ?? competitor.marketShare)}
-                          className="h-1"
-                        />
-                      </div>
+                    <CardContent className="p-2">
+                      <img
+                        src={getCardImageFor(competitor.name)}
+                        alt={`${competitor.name} card`}
+                        className="w-full h-auto rounded-md shadow-md select-none"
+                        draggable="false"
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement
+                          img.onerror = null
+                          img.src = "/placeholder.jpg"
+                        }}
+                      />
                     </CardContent>
                   </Card>
                 )
