@@ -360,6 +360,40 @@ function activityScoreFromLabel(label: string): number {
   return 0.4;
 }
 
+// Computed battle stats (HP and Attack Power) using provided formulas
+// HP = 50 + 0.3*Revenue(M USD) + 0.2*MarketShare(%) + 0.1*DeviceNumber + 0.1*PatentNumber + 0.1*ThreatScore
+// ATK = 10 + 0.4*ThreatScore + 0.3*PatentNumber + 0.2*DeviceNumber + 0.1*ActivityScore(0-1)
+function computeHP(
+  revenueM: number,
+  marketSharePct: number,
+  deviceNum: number,
+  patentNum: number,
+  threatScore: number
+): number {
+  const hp =
+    50 +
+    0.3 * (isFinite(revenueM) ? revenueM : 0) +
+    0.2 * (isFinite(marketSharePct) ? marketSharePct : 0) +
+    0.1 * (isFinite(deviceNum) ? deviceNum : 0) +
+    0.1 * (isFinite(patentNum) ? patentNum : 0) +
+    0.1 * (isFinite(threatScore) ? threatScore : 0);
+  return Math.round(hp);
+}
+
+function computeAttack(
+  threatScore: number,
+  patentNum: number,
+  deviceNum: number,
+  activityScore01: number
+): number {
+  const atk =
+    10 +
+    0.4 * (isFinite(threatScore) ? threatScore : 0) +
+    0.3 * (isFinite(patentNum) ? patentNum : 0) +
+    0.2 * (isFinite(deviceNum) ? deviceNum : 0) +
+    0.1 * (isFinite(activityScore01) ? activityScore01 : 0);
+  return Math.round(atk);
+}
 export default function EyeOnRivalsLanding() {
   const [selectedCompetitor, setSelectedCompetitor] = useState(competitors[0])
   const [gamifiedMode, setGamefiedMode] = useState(false)
@@ -817,17 +851,40 @@ export default function EyeOnRivalsLanding() {
                     onClick={() => setSelectedCompetitor(competitor)}
                   >
                     <CardContent className="p-2">
-                      <img
-                        src={getCardImageFor(competitor.name)}
-                        alt={`${competitor.name} card`}
-                        className="w-full h-auto rounded-md shadow-md select-none"
-                        draggable="false"
-                        onError={(e) => {
-                          const img = e.currentTarget as HTMLImageElement
-                          img.onerror = null
-                          img.src = "/placeholder.jpg"
-                        }}
-                      />
+                      <div className="relative">
+                        <img
+                          src={getCardImageFor(competitor.name)}
+                          alt={`${competitor.name} card`}
+                          className="w-full h-auto rounded-md shadow-md select-none"
+                          draggable="false"
+                          onError={(e) => {
+                            const img = e.currentTarget as HTMLImageElement
+                            img.onerror = null
+                            img.src = "/placeholder.jpg"
+                          }}
+                        />
+                        {(() => {
+                          const lower = competitor.name.toLowerCase();
+                          const revUSD = rtStats[lower]?.revenueUSD ?? parseRevenueString(competitor.revenue);
+                          const revM = (isFinite(revUSD) ? revUSD : 0) / 1_000_000;
+                          const deviceNum = rtStats[lower]?.products ?? competitor.products ?? 0;
+                          const patentNum = rtStats[lower]?.patents ?? competitor.patents ?? 0;
+                          const msVal = (msData.find(d => d.name.toLowerCase() === lower)?.value) ?? competitor.marketShare ?? 0;
+                          const activityScore = activityScoreFromLabel(act.label);
+                          const hp = computeHP(revM, msVal, deviceNum, patentNum, computedThreat);
+                          const atk = computeAttack(computedThreat, patentNum, deviceNum, activityScore);
+                          return (
+                            <>
+                              <div className="absolute top-2 left-2 bg-black/70 text-white text-xs sm:text-sm font-bold px-2 py-1 rounded">
+                                HP {hp}
+                              </div>
+                              <div className="absolute top-2 right-2 bg-black/70 text-white text-xs sm:text-sm font-bold px-2 py-1 rounded">
+                                ATK {atk}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
                     </CardContent>
                   </Card>
                 )

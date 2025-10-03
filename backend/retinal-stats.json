@@ -2,34 +2,34 @@
   "companies": [
     {
       "name": "Zeiss",
-      "revenueUSD": 600,
-      "products": 5,
-      "patents": 350
+      "revenueUSD": 500000000,
+      "products": 6,
+      "patents": 800
     },
     {
       "name": "Canon",
-      "revenueUSD": 200,
-      "products": 6,
-      "patents": 250
+      "revenueUSD": 300000000,
+      "products": 7,
+      "patents": 400
     },
     {
       "name": "Optovue",
-      "revenueUSD": 220,
+      "revenueUSD": 150000000,
       "products": 4,
-      "patents": 180
+      "patents": 200
     },
     {
       "name": "Topcon",
-      "revenueUSD": 450,
+      "revenueUSD": 320000000,
       "products": 9,
-      "patents": 300
+      "patents": 550
     },
     {
       "name": "Nidek",
-      "revenueUSD": 180,
+      "revenueUSD": 250000000,
       "products": 7,
-      "patents": 200
+      "patents": 350
     }
   ],
-  "updatedAt": "2025-10-03T04:00:39.856Z"
+  "updatedAt": "2025-10-03T08:04:16.394Z"
 }
