@@ -277,7 +277,7 @@ let marketShareData: { name: string; value: number; color?: string }[] = fallbac
 const COLORS = ["#2563eb", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
 
 type NewsItem = { Date: string; Headline: string; URL: string }
-type JobItem = { Date: string; "Job Title": string; URL: string }
+type JobItem = { Date?: string; "Job Title": string; URL: string }
 type WhitePaper = { Date: string; Title: string; Abstract: string; URL: string }
 type Patent = { Date: string; Title: string; Abstract: string; URL: string }
 type PatentLite = { Title: string; Date: string; URL: string }
@@ -288,6 +288,49 @@ type CompanyData = {
   Jobs: JobItem[]
   whitePapers: WhitePaper[]
   patents: Patent[]
+}
+
+// Activity computation helpers
+const THIS_YEAR = new Date().getFullYear();
+
+function getYearFromDate(dateStr?: string): number | null {
+  if (!dateStr) return null;
+  // Prefer a 4-digit year anywhere in the string
+  const m = dateStr.match(/(19|20)\d{2}/);
+  if (m) return parseInt(m[0], 10);
+  // Fallback for ISO-like strings
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d.getFullYear();
+}
+
+function activityLabelFromTotal(total: number): "Very Low" | "Low" | "Medium" | "High" | "Very High" {
+  if (total <= 1) return "Very Low";
+  if (total <= 3) return "Low";
+  if (total <= 6) return "Medium";
+  if (total <= 10) return "High";
+  return "Very High";
+}
+
+// Compute current-year activity for a company name, using loaded outputData
+function getCompanyActivityFor(companyData: CompanyData[], name: string) {
+  const comp = companyData.find(c => c.name.toLowerCase().includes(name.toLowerCase()));
+  const news = comp?.news ?? [];
+  const patents = comp?.patents ?? [];
+  const jobs = (comp?.Jobs && comp.Jobs.length ? comp.Jobs : comp?.jobListings ?? []) as JobItem[];
+
+  const newsThisYear = news.reduce((acc, n) => acc + (getYearFromDate(n.Date) === THIS_YEAR ? 1 : 0), 0);
+  const patentsThisYear = patents.reduce((acc, p) => acc + (getYearFromDate(p.Date) === THIS_YEAR ? 1 : 0), 0);
+
+  // Prefer date filtering if present; otherwise assume current listings are this year
+  let jobsThisYear = jobs.reduce((acc, j) => acc + (getYearFromDate(j.Date) === THIS_YEAR ? 1 : 0), 0);
+  if (jobsThisYear === 0 && jobs.length > 0) {
+    jobsThisYear = jobs.length;
+  }
+
+  const total = newsThisYear + patentsThisYear + jobsThisYear;
+  const label = activityLabelFromTotal(total);
+
+  return { newsThisYear, patentsThisYear, jobsThisYear, total, label };
 }
 
 export default function EyeOnRivalsLanding() {
@@ -683,6 +726,7 @@ export default function EyeOnRivalsLanding() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
             {competitors.map((competitor) => {
               const threat = getThreatLevel(competitor.threatScore)
+              const act = getCompanyActivityFor(companyData, competitor.name)
 
               if (gamifiedMode) {
                 return (
@@ -832,7 +876,7 @@ export default function EyeOnRivalsLanding() {
                     </div>
                     <Badge variant="outline" className="w-full justify-center text-blue-600/80">
                       <Activity className="w-3 h-3 mr-1" />
-                      {competitor.recentActivity} Activity
+                      {act.label} Activity
                     </Badge>
                   </CardContent>
                 </Card>
