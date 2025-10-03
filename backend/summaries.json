@@ -1,0 +1,25 @@
+{
+  "summaries": {
+    "Topcon": {
+      "text": "Topcon Harmony Referral System (v3) achieved EU MDR Class IIa certification.\nLaunched \"Eyes on Tomorrow\" podcast, partnering to bridge Optometry and Ophthalmology insights.\nSponsors OIA Imaging Competition and BARS Poster Competition for eye care professionals.",
+      "model": "gemini-2.5-flash"
+    },
+    "Optovue": {
+      "text": "High-resolution OCT and en face OCT enhance cornea verticillata analysis & monitoring.\nRetinomax hand-held autorefractor improves pediatric eye screening accuracy & ease of use.\nEyeWisdom®MCS AI solution detects multiple fundus diseases, including diabetic retinopathy.",
+      "model": "gemini-2.5-flash"
+    },
+    "Canon": {
+      "text": "Awarded EcoVadis Gold Medal, ranking in top 5% globally for sustainability.\nLaunched Aplio beyond, a premium, eco-friendly ultrasound system for expert users.\nAquilion ONE / INSIGHT Edition CT improved cardiac diagnosis at Blackpool Victoria Hospital.",
+      "model": "gemini-2.5-flash"
+    },
+    "Nidek": {
+      "text": "NIDEK launched GS Viewer for NAVIS-EX, enhancing GS-1 for clinical workflow & patient management.\nNIDEK, with Orbis in Vietnam, screened 5,000+ for diabetic retinopathy using AI & NIDEK cameras.\nNIDEK launched AutoTint, an automated dry laser tinting system reducing cycle tim",
+      "model": "gemini-2.5-flash"
+    },
+    "Zeiss": {
+      "text": "ZEISS SMT invested >€20M, expanded Rossdorf cleanrooms 80% for mask repair systems.\nZEISS MedTech's SMILE w/ VISUMAX (market leader) nominated for German Future Prize.\nZEISS partners w/ Concept Life Sciences to automate spatial biology imaging & AI.",
+      "model": "gemini-2.5-flash"
+    }
+  },
+  "updatedAt": "2025-10-03T02:47:43.597Z"
+}
