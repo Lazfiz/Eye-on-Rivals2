@@ -28,12 +28,26 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [summaries, setSummaries] = useState<Record<string, { text: string; model?: string } | null>>({})
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/competitors")
       .then((r) => r.json())
       .then((json: ApiData) => setData(json?.Competitor ?? []))
       .catch(() => setData([]))
+  }, [])
+
+  // Load persisted summaries (if any)
+  useEffect(() => {
+    fetch("/api/summaries")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json?.summaries) setSummaries(json.summaries)
+        if (json?.updatedAt) setUpdatedAt(json.updatedAt)
+      })
+      .catch(() => {
+        // ignore, start with empty summaries
+      })
   }, [])
 
   function findByName(name: string): CompetitorJson | undefined {
@@ -79,7 +93,25 @@ export default function ReportsPage() {
         })
       )
 
-      setSummaries(updates)
+      // Persist summaries to backend
+      try {
+        const saveRes = await fetch("/api/summaries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ summaries: updates }),
+        })
+        const saved = await saveRes.json()
+        if (saveRes.ok) {
+          setSummaries(saved.summaries ?? updates)
+          setUpdatedAt(saved.updatedAt ?? new Date().toISOString())
+        } else {
+          setSummaries(updates)
+          setError(saved?.error || "Failed to save summaries, using in-memory results.")
+        }
+      } catch (err: any) {
+        setSummaries(updates)
+        setError(err?.message || "Failed to save summaries, using in-memory results.")
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to update summaries.")
     } finally {
@@ -90,10 +122,10 @@ export default function ReportsPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b backdrop-blur-sm sticky top-0 z-40" style={{ backgroundColor: "#2E5A87" }}>
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <img src="/optos-logo.webp" alt="Optos Logo" className="w-20 h-20 object-contain" />
+              <img src="/optos-logo.webp" alt="Optos Logo" className="w-24 h-24 object-contain" />
               <div>
                 <h1 className="text-xl font-bold text-white">Eye on Rivals</h1>
                 <p className="text-sm text-white/80">Reports</p>
@@ -107,7 +139,7 @@ export default function ReportsPage() {
               <a href="#insights" className="text-white/70 cursor-not-allowed">Insights</a>
               <Link href="/reports" className="text-white underline underline-offset-4">Reports</Link>
             </nav>
-            <div>
+            <div className="flex flex-col items-end">
               <Button
                 size="sm"
                 onClick={summarizeAll}
@@ -117,6 +149,9 @@ export default function ReportsPage() {
                 <RefreshCcw className="w-4 h-4 mr-2" />
                 {loading ? "Updating..." : "Update"}
               </Button>
+              <span className="mt-1 text-xs text-white/80">
+                {updatedAt ? `Last updated: ${new Date(updatedAt).toLocaleString()}` : "No saved summaries yet"}
+              </span>
             </div>
           </div>
         </div>
@@ -170,6 +205,35 @@ export default function ReportsPage() {
           </div>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="py-2" style={{ backgroundColor: "#2E5A87" }}>
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="flex items-center space-x-3 mb-4 md:mb-0">
+              <img src="/optos-logo.webp" alt="Optos Logo" className="w-24 h-24 object-contain" />
+              <span className="text-lg font-semibold text-white">Eye on Rivals</span>
+            </div>
+            <div className="flex space-x-6 text-sm text-white/80">
+              <a href="#" className="hover:text-white transition-colors">
+                Privacy
+              </a>
+              <a href="#" className="hover:text-white transition-colors">
+                Terms
+              </a>
+              <a href="#" className="hover:text-white transition-colors">
+                Support
+              </a>
+              <a href="#" className="hover:text-white transition-colors">
+                Contact
+              </a>
+            </div>
+          </div>
+          <div className="mt-8 pt-8 border-t border-white/20 text-center text-sm text-white/80">
+            <p>&copy; 2025 Eye on Rivals. Powered by Optos. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

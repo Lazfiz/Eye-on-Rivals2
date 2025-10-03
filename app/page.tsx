@@ -29,6 +29,7 @@ import {
   Star,
   Award,
   Flame,
+  RefreshCcw,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -166,24 +167,112 @@ const competitors = [
   },
 ]
 
-// Mock trend data
-const trendData = [
-  { month: "Jan", patents: 12, products: 3, jobPostings: 45 },
-  { month: "Feb", patents: 15, products: 2, jobPostings: 52 },
-  { month: "Mar", patents: 18, products: 4, jobPostings: 38 },
-  { month: "Apr", patents: 22, products: 1, jobPostings: 61 },
-  { month: "May", patents: 19, products: 3, jobPostings: 47 },
-  { month: "Jun", patents: 25, products: 5, jobPostings: 73 },
+// Helper to parse date string and get month
+function parseDateMonth(dateStr: string): number {
+  // Handle DD/MM/YYYY format
+  if (dateStr.includes('/')) {
+    const parts = dateStr.split('/')
+    if (parts.length === 3) {
+      const day = parseInt(parts[0])
+      const month = parseInt(parts[1]) - 1 // 0-11
+      const year = parseInt(parts[2])
+      return year === 2025 ? month : -1
+    }
+  }
+  return -1
+}
+
+// Helper to generate trend data for 2025
+function generateTrendData(companyData: CompanyData[]) {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const currentMonth = new Date().getMonth() // 0-11
+  const data = []
+  
+  // Initialize counts for each month
+  const monthlyJobCounts = new Array(12).fill(0)
+  const monthlyPatentCounts = new Array(12).fill(0)
+  const monthlyPressCounts = new Array(12).fill(0)
+  
+  // Count jobs per month (distribute evenly since we don't have actual dates)
+  companyData.forEach(company => {
+    if (company.Jobs && company.Jobs.length > 0) {
+      const jobsPerMonth = Math.ceil(company.Jobs.length / (currentMonth + 1))
+      
+      for (let i = 0; i <= currentMonth; i++) {
+        const remainingJobs = company.Jobs.length - (i * jobsPerMonth)
+        const jobsToAdd = Math.min(jobsPerMonth, Math.max(0, remainingJobs))
+        monthlyJobCounts[i] += jobsToAdd
+      }
+    }
+  })
+  
+  // Count patents per month using actual dates
+  companyData.forEach(company => {
+    if (company.patents && company.patents.length > 0) {
+      company.patents.forEach(patent => {
+        if (patent.Date) {
+          const month = parseDateMonth(patent.Date)
+          if (month >= 0 && month <= currentMonth) {
+            monthlyPatentCounts[month]++
+          }
+        }
+      })
+    }
+  })
+  
+  // Count press releases per month using actual dates
+  companyData.forEach(company => {
+    if (company.news && company.news.length > 0) {
+      company.news.forEach(pressRelease => {
+        if (pressRelease.Date) {
+          const month = parseDateMonth(pressRelease.Date)
+          if (month >= 0 && month <= currentMonth) {
+            monthlyPressCounts[month]++
+          }
+        }
+      })
+    }
+  })
+  
+  // Generate trend data up to current month
+  for (let i = 0; i <= currentMonth; i++) {
+    data.push({
+      month: months[i],
+      jobPostings: monthlyJobCounts[i],
+      patents: monthlyPatentCounts[i],
+      pressReleases: monthlyPressCounts[i],
+    })
+  }
+  
+  return data
+}
+
+const MARKET_COLORS: Record<string, string> = {
+  Zeiss: "#2563eb",       // blue
+  Topcon: "#10b981",      // green
+  Canon: "#ef4444",       // red
+  Nidek: "#f59e0b",       // amber
+  Optovue: "#8b5cf6",     // purple
+  Optos: "#1d4ed8",       // deep blue
+  Heidelberg: "#14b8a6",  // teal
+  Others: "#9ca3af",      // gray
+}
+
+// Fallback static distribution if backend file not yet generated
+const fallbackMarketShare = [
+  { name: "Optos", value: 40 },
+  { name: "Zeiss", value: 22 },
+  { name: "Topcon", value: 18 },
+  { name: "Nidek", value: 15 },
+  { name: "Canon", value: 20 },
+  { name: "Optovue", value: 5 },
 ]
 
-const marketShareData = [
-  { name: "Optos", value: 40, color: "#2563eb" },
-  ...competitors.map((comp) => ({
-    name: comp.name,
-    value: comp.marketShare,
-    color: comp.color.replace("bg-", "#"),
-  })),
-]
+// This will be replaced by persisted distribution when available
+let marketShareData: { name: string; value: number; color?: string }[] = fallbackMarketShare.map(d => ({
+  ...d,
+  color: MARKET_COLORS[d.name] || "#64748b",
+}))
 
 const COLORS = ["#2563eb", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
 
@@ -196,6 +285,7 @@ type CompanyData = {
   name: string
   news: NewsItem[]
   jobListings: JobItem[]
+  Jobs: JobItem[]
   whitePapers: WhitePaper[]
   patents: Patent[]
 }
@@ -205,6 +295,21 @@ export default function EyeOnRivalsLanding() {
   const [gamifiedMode, setGamefiedMode] = useState(false)
   const [companyData, setCompanyData] = useState<CompanyData[]>([])
   const [patentsByCompany, setPatentsByCompany] = useState<Record<string, PatentLite[]>>({})
+  const [isScraping, setIsScraping] = useState(false)
+  const [scrapeMessage, setScrapeMessage] = useState("")
+  const [showVideo, setShowVideo] = useState(false)
+
+  // Market share state (persisted via /api/market-share)
+  const [msData, setMsData] = useState<{ name: string; value: number }[]>([])
+  const [msUpdatedAt, setMsUpdatedAt] = useState<string | null>(null)
+  const [msLoading, setMsLoading] = useState(false)
+  const [msError, setMsError] = useState<string | null>(null)
+
+  // Retinal-imaging stats (persisted via /api/retinal-stats)
+  const [rtStats, setRtStats] = useState<Record<string, { revenueUSD: number; products: number; patents: number }>>({})
+  const [rtUpdatedAt, setRtUpdatedAt] = useState<string | null>(null)
+  const [rtLoading, setRtLoading] = useState(false)
+  const [rtError, setRtError] = useState<string | null>(null)
  
   useEffect(() => {
     let isMounted = true
@@ -215,6 +320,7 @@ export default function EyeOnRivalsLanding() {
           name: c.Name,
           news: c.News ?? [],
           jobListings: c["Job Listings"] ?? [],
+          Jobs: c.Jobs ?? [],
           whitePapers: c["White Papers"] ?? [],
           patents: c.Patents ?? [],
         }))
@@ -243,6 +349,47 @@ export default function EyeOnRivalsLanding() {
     }
   }, [])
 
+  // Load persisted market share distribution (if any)
+  useEffect(() => {
+    let alive = true
+    fetch("/api/market-share")
+      .then((r) => r.json())
+      .then((json) => {
+        if (!alive) return
+        if (Array.isArray(json?.distribution)) {
+          setMsData(json.distribution)
+        }
+        if (json?.updatedAt) setMsUpdatedAt(json.updatedAt)
+      })
+      .catch(() => {
+        // ignore
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+ 
+  // Load persisted retinal stats (if any)
+  useEffect(() => {
+    let alive = true
+    fetch("/api/retinal-stats")
+      .then((r) => r.json())
+      .then((json) => {
+        if (!alive) return
+        const rows = Array.isArray(json?.companies) ? json.companies as { name: string; revenueUSD: number; products: number; patents: number }[] : []
+        const map: Record<string, { revenueUSD: number; products: number; patents: number }> = {}
+        rows.forEach((row) => {
+          map[row.name.toLowerCase()] = { revenueUSD: row.revenueUSD || 0, products: row.products || 0, patents: row.patents || 0 }
+        })
+        setRtStats(map)
+        if (json?.updatedAt) setRtUpdatedAt(json.updatedAt)
+      })
+      .catch(() => {
+        // ignore
+      })
+    return () => { alive = false }
+  }, [])
+
   // Helper to fetch patents for a competitor (case-insensitive)
   function getPatentsFor(name: string): PatentLite[] {
     const entries = Object.entries(patentsByCompany)
@@ -253,8 +400,112 @@ export default function EyeOnRivalsLanding() {
   const selectedCompany = companyData.find(
     (c) => c.name.toLowerCase() === selectedCompetitor.name.toLowerCase()
   )
+  
+  // Generate trend data based on actual company data
+  const trendData = generateTrendData(companyData)
 
+  // If we have msData from backend, override marketShareData for the chart
+  if (msData && msData.length) {
+    marketShareData = msData.map((d) => ({
+      ...d,
+      color: MARKET_COLORS[d.name] || "#64748b",
+    }))
+  }
+ 
+  // Handle scraper execution
+  const handleStartMonitoring = async () => {
+    setIsScraping(true)
+    setShowVideo(true)
+    setScrapeMessage("Starting data collection...")
+    
+    try {
+      const response = await fetch('/api/scraper', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      
+      const result = await response.json()
+      
+      if (result.success) {
+        setScrapeMessage(`Data collection completed successfully! Used ${result.pythonCommand || 'python'}. Refreshing data...`)
+        // Hide video and refresh data after scraping
+        setTimeout(() => {
+          setShowVideo(false)
+          setTimeout(() => {
+            window.location.reload()
+          }, 500)
+        }, 1000)
+      } else {
+        setScrapeMessage(`Failed to collect data: ${result.message}${result.details ? ` - ${result.details}` : ''}`)
+        setShowVideo(false)
+      }
+    } catch (error) {
+      setScrapeMessage("Failed to start data collection. Please try again.")
+      console.error('Scraper error:', error)
+      setShowVideo(false)
+    } finally {
+      setIsScraping(false)
+    }
+  }
 
+  // Update market share distribution via Gemini and persist to backend
+  const updateMarketShare = async () => {
+    setMsLoading(true)
+    setMsError(null)
+    try {
+      const res = await fetch("/api/market-share", { method: "POST" })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to update market share")
+      }
+      if (Array.isArray(json?.distribution)) setMsData(json.distribution)
+      setMsUpdatedAt(json?.updatedAt || new Date().toISOString())
+    } catch (e: any) {
+      setMsError(e?.message || "Failed to update market share")
+    } finally {
+      setMsLoading(false)
+    }
+  }
+
+  // Format revenue short, e.g., $1.2B
+  const formatUSDShort = (n: number) => {
+    if (!n || n <= 0) return "N/A"
+    const abs = Math.abs(n)
+    const sign = n < 0 ? "-" : ""
+    if (abs >= 1_000_000_000_000) return `${sign}$${(abs / 1_000_000_000_000).toFixed(1)}T`
+    if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1)}B`
+    if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`
+    if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`
+    return `${sign}$${abs.toFixed(0)}`
+  }
+
+  // Update retinal imaging stats via Gemini and persist to backend
+  const updateRetinalStats = async () => {
+    setRtLoading(true)
+    setRtError(null)
+    try {
+      const res = await fetch("/api/retinal-stats", { method: "POST" })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to update company stats")
+      }
+      const rows = Array.isArray(json?.companies) ? json.companies as { name: string; revenueUSD: number; products: number; patents: number }[] : []
+      const map: Record<string, { revenueUSD: number; products: number; patents: number }> = {}
+      rows.forEach((row) => {
+        map[row.name.toLowerCase()] = { revenueUSD: row.revenueUSD || 0, products: row.products || 0, patents: row.patents || 0 }
+      })
+      setRtStats(map)
+      setRtUpdatedAt(json?.updatedAt || new Date().toISOString())
+    } catch (e: any) {
+      setRtError(e?.message || "Failed to update company stats")
+    } finally {
+      setRtLoading(false)
+    }
+  }
+
+ 
   const getThreatLevel = (score: number) => {
     if (score >= 80) return { level: "Critical", color: "bg-red-500" }
     if (score >= 60) return { level: "High", color: "bg-yellow-500" }
@@ -303,14 +554,21 @@ export default function EyeOnRivalsLanding() {
     return { name, item }
   })
 
+  // One job per competitor (first item), to mirror Press Releases widget
+  const jobsEntries: { name: string; item?: JobItem }[] = pressOrder.map((name) => {
+    const comp = companyData.find((c) => c.name.toLowerCase().includes(name.toLowerCase()))
+    const item = comp?.Jobs?.[0]
+    return { name, item }
+  })
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
       {/* Header */}
       <header className="border-b backdrop-blur-sm sticky top-0 z-50" style={{ backgroundColor: "#2E5A87" }}>
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <img src="/optos-logo.webp" alt="Optos Logo" className="w-64 h-64 object-contain" />
+              <img src="/optos-logo.webp" alt="Optos Logo" className="w-24 h-24 object-contain" />
               <div>
                 <h1 className="text-xl font-bold text-white">Eye on Rivals</h1>
                 <p className="text-sm text-white/80">Powered by Optos</p>
@@ -353,18 +611,32 @@ export default function EyeOnRivalsLanding() {
         <div className="container mx-auto px-4 text-center">
           <div className="max-w-4xl mx-auto">
             <h2 className="text-4xl md:text-6xl font-bold text-blue-600 mb-6 text-balance">
-              Stay Ahead of Your <span className="text-blue-500">Competition</span>
+              Stay Ahead of Your Competition
             </h2>
             <p className="text-xl text-blue-600/80 mb-8 text-pretty">
               Monitor competitors, track market movements, and make data-driven decisions with our gamified competitive
               intelligence platform.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="text-lg px-8 bg-blue-500 text-white hover:bg-blue-600">
+              <Button
+                size="lg"
+                className="text-lg px-8 bg-blue-500 text-white hover:bg-blue-600"
+                onClick={handleStartMonitoring}
+                disabled={isScraping}
+              >
                 <Zap className="w-5 h-5 mr-2" />
-                Start Monitoring
+                {isScraping ? "Monitoring in Progress..." : "Start Monitoring"}
               </Button>
             </div>
+            {scrapeMessage && (
+              <div className={`mt-4 p-3 rounded-lg text-center ${
+                scrapeMessage.includes("successfully")
+                  ? "bg-green-100 text-green-800 border border-green-200"
+                  : "bg-red-100 text-red-800 border border-red-200"
+              }`}>
+                {scrapeMessage}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -381,6 +653,31 @@ export default function EyeOnRivalsLanding() {
                 ? "Choose your rival and analyze their battle stats"
                 : "Real-time intelligence on your key rivals"}
             </p>
+          </div>
+
+          {/* Update AI-derived company stats */}
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="text-left">
+              <p className="text-sm text-blue-600/80">
+                AI estimates for revenue, products, and patents. Persisted to backend/retinal-stats.json
+              </p>
+              <div className="text-xs text-blue-600/60">
+                {rtUpdatedAt ? `Last updated: ${new Date(rtUpdatedAt).toLocaleString()}` : "No saved stats yet"}
+              </div>
+              {rtError && <div className="text-xs text-red-600 mt-1">{rtError}</div>}
+            </div>
+            <div className="text-right">
+              <Button
+                size="sm"
+                onClick={updateRetinalStats}
+                disabled={rtLoading}
+                className="bg-blue-500 text-white hover:bg-blue-600"
+                title="Generate retinal imaging stats with Gemini and persist"
+              >
+                <RefreshCcw className="w-4 h-4 mr-2" />
+                {rtLoading ? "Updating..." : "Update Company Stats"}
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
@@ -466,9 +763,14 @@ export default function EyeOnRivalsLanding() {
                       <div>
                         <div className="flex justify-between text-xs mb-1 text-blue-600/80">
                           <span className="font-semibold">Power Level</span>
-                          <span className="font-mono text-blue-600">{competitor.marketShare}%</span>
+                          <span className="font-mono text-blue-600">
+                            {(msData.find(d => d.name.toLowerCase() === competitor.name.toLowerCase())?.value ?? competitor.marketShare)}%
+                          </span>
                         </div>
-                        <Progress value={competitor.marketShare} className="h-1" />
+                        <Progress
+                          value={(msData.find(d => d.name.toLowerCase() === competitor.name.toLowerCase())?.value ?? competitor.marketShare)}
+                          className="h-1"
+                        />
                       </div>
                     </CardContent>
                   </Card>
@@ -503,19 +805,29 @@ export default function EyeOnRivalsLanding() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
                         <p className="text-blue-600/80">Market Share</p>
-                        <p className="font-semibold text-blue-600">{competitor.marketShare}%</p>
+                        <p className="font-semibold text-blue-600">
+                          {(msData.find(d => d.name.toLowerCase() === competitor.name.toLowerCase())?.value ?? competitor.marketShare)}%
+                        </p>
                       </div>
                       <div>
                         <p className="text-blue-600/80">Products</p>
-                        <p className="font-semibold text-blue-600">{competitor.products}</p>
+                        <p className="font-semibold text-blue-600">
+                          {rtStats[competitor.name.toLowerCase()]?.products ?? competitor.products}
+                        </p>
                       </div>
                       <div>
                         <p className="text-blue-600/80">Patents</p>
-                        <p className="font-semibold text-blue-600">{competitor.patents}</p>
+                        <p className="font-semibold text-blue-600">
+                          {rtStats[competitor.name.toLowerCase()]?.patents ?? competitor.patents}
+                        </p>
                       </div>
                       <div>
                         <p className="text-blue-600/80">Revenue</p>
-                        <p className="font-semibold text-blue-600">{competitor.revenue}</p>
+                        <p className="font-semibold text-blue-600">
+                          {(rtStats[competitor.name.toLowerCase()]?.revenueUSD ?? 0) > 0
+                            ? formatUSDShort(rtStats[competitor.name.toLowerCase()]!.revenueUSD)
+                            : competitor.revenue}
+                        </p>
                       </div>
                     </div>
                     <Badge variant="outline" className="w-full justify-center text-blue-600/80">
@@ -610,7 +922,7 @@ export default function EyeOnRivalsLanding() {
                   Market Trends
                 </CardTitle>
                 <CardDescription className="text-blue-600/80">
-                  Patents, products, and job postings over time
+                  Patents, press releases, and job postings over time
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -621,7 +933,7 @@ export default function EyeOnRivalsLanding() {
                     <YAxis stroke="#2563eb" />
                     <Tooltip wrapperStyle={{ backgroundColor: "#2E5A87", color: "white" }} />
                     <Line type="monotone" dataKey="patents" stroke="#3b82f6" strokeWidth={2} />
-                    <Line type="monotone" dataKey="products" stroke="#10b981" strokeWidth={2} />
+                    <Line type="monotone" dataKey="pressReleases" stroke="#10b981" strokeWidth={2} />
                     <Line type="monotone" dataKey="jobPostings" stroke="#f59e0b" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -630,11 +942,37 @@ export default function EyeOnRivalsLanding() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center text-blue-600">
-                  <Target className="w-5 h-5 mr-2" />
-                  Market Share Distribution
-                </CardTitle>
-                <CardDescription className="text-blue-600/80">Current market positioning</CardDescription>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="flex items-center text-blue-600">
+                      <Target className="w-5 h-5 mr-2" />
+                      Market Share Distribution
+                    </CardTitle>
+                    <CardDescription className="text-blue-600/80">
+                      Current market positioning
+                    </CardDescription>
+                    <div className="text-xs mt-1">
+                      {msUpdatedAt ? (
+                        <span className="text-blue-600/60">Last updated: {new Date(msUpdatedAt).toLocaleString()}</span>
+                      ) : (
+                        <span className="text-blue-600/60">Using fallback data</span>
+                      )}
+                      {msError && (
+                        <div className="text-red-600 mt-1">{msError}</div>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={updateMarketShare}
+                    disabled={msLoading}
+                    className="bg-blue-500 text-white hover:bg-blue-600"
+                    title="Generate fresh market share with Gemini and persist"
+                  >
+                    <RefreshCcw className="w-4 h-4 mr-2" />
+                    {msLoading ? "Updating..." : "Update"}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -650,7 +988,7 @@ export default function EyeOnRivalsLanding() {
                       dataKey="value"
                     >
                       {marketShareData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip wrapperStyle={{ backgroundColor: "#2E5A87", color: "white" }} />
@@ -731,22 +1069,29 @@ export default function EyeOnRivalsLanding() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {selectedCompany && selectedCompany.jobListings.length > 0 ? (
-                  selectedCompany.jobListings.map((job, idx) => (
-                    <div
-                      key={idx}
-                      className={`border-l-4 pl-4 ${["border-green-500","border-blue-500","border-yellow-500","border-purple-500","border-red-500"][idx % 5]}`}
-                    >
-                      <h4 className="font-semibold text-blue-600">{job["Job Title"]}</h4>
-                      <p className="text-xs text-blue-600/80">{job.Date}</p>
-                      <a href={job.URL} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
-                        View job posting
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-blue-600/80">No job postings available.</p>
-                )}
+                {jobsEntries.map(({ name, item }) => (
+                  <div
+                    key={name}
+                    className={`border-l-4 pl-4 ${companyPressBorder(name)}`}
+                  >
+                    <h4 className="font-semibold text-blue-600">
+                      {item ? `${name}. ${item["Job Title"]}` : `${name}. No job postings available.`}
+                    </h4>
+                    {item && (
+                      <>
+                        <p className="text-xs text-blue-600/80">{item.Date}</p>
+                        <a
+                          href={item.URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 underline"
+                        >
+                          View job posting
+                        </a>
+                      </>
+                    )}
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>
@@ -754,11 +1099,11 @@ export default function EyeOnRivalsLanding() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12" style={{ backgroundColor: "#2E5A87" }}>
-        <div className="container mx-auto px-4">
+      <footer className="py-2" style={{ backgroundColor: "#2E5A87" }}>
+        <div className="container mx-auto px-2">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center space-x-3 mb-4 md:mb-0">
-              <img src="/optos-logo.webp" alt="Optos Logo" className="w-40 h-40 object-contain" />
+              <img src="/optos-logo.webp" alt="Optos Logo" className="w-24 h-24 object-contain" />
               <span className="text-lg font-semibold text-white">Eye on Rivals</span>
             </div>
             <div className="flex space-x-6 text-sm text-white/80">
@@ -777,10 +1122,28 @@ export default function EyeOnRivalsLanding() {
             </div>
           </div>
           <div className="mt-8 pt-8 border-t border-white/20 text-center text-sm text-white/80">
-            <p>&copy; 2024 Eye on Rivals. Powered by Optos. All rights reserved.</p>
+            <p>&copy; 2025 Eye on Rivals. Powered by Optos. All rights reserved.</p>
           </div>
         </div>
       </footer>
+      
+      {/* Video overlay */}
+      {showVideo && (
+        <div className="fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="relative">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-96 h-96 rounded-lg shadow-2xl"
+            >
+              <source src="/theEye.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
