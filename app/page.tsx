@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   XAxis,
   YAxis,
@@ -32,6 +33,9 @@ import {
   RefreshCcw,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import ScrapeOverlay from "@/components/scrape/ScrapeOverlay"
+import { useScraperClient } from "@/components/scrape/useScraperClient"
 
 const competitors = [
   {
@@ -160,91 +164,132 @@ const competitors = [
     type: "Niche Expert",
     rarity: "Common",
     abilities: ["Specialized Knowledge", "Agile Response", "Quality Focus"],
-    weaknesses: ["Limited Scale", "Resource Constraints"],
+    weaknesses: ["Name-change penalty", "Resource Constraints"],
     strengths: ["Deep Expertise", "Customer Relationships", "Flexibility"],
     battleCry: "Excellence in every detail!",
     element: "💜",
   },
 ]
 
-// Helper to parse date string and get month
-function parseDateMonth(dateStr: string): number {
-  // Handle DD/MM/YYYY format
-  if (dateStr.includes('/')) {
-    const parts = dateStr.split('/')
-    if (parts.length === 3) {
-      const day = parseInt(parts[0])
-      const month = parseInt(parts[1]) - 1 // 0-11
-      const year = parseInt(parts[2])
-      return year === 2025 ? month : -1
-    }
-  }
-  return -1
-}
+// Robust date parsing helpers for charts
+const MONTH_ABBR: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11,
+};
 
-// Helper to generate trend data for 2025
-function generateTrendData(companyData: CompanyData[]) {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  const currentMonth = new Date().getMonth() // 0-11
-  const data = []
-  
-  // Initialize counts for each month
-  const monthlyJobCounts = new Array(12).fill(0)
-  const monthlyPatentCounts = new Array(12).fill(0)
-  const monthlyPressCounts = new Array(12).fill(0)
-  
-  // Count jobs per month (distribute evenly since we don't have actual dates)
-  companyData.forEach(company => {
-    if (company.Jobs && company.Jobs.length > 0) {
-      const jobsPerMonth = Math.ceil(company.Jobs.length / (currentMonth + 1))
-      
-      for (let i = 0; i <= currentMonth; i++) {
-        const remainingJobs = company.Jobs.length - (i * jobsPerMonth)
-        const jobsToAdd = Math.min(jobsPerMonth, Math.max(0, remainingJobs))
-        monthlyJobCounts[i] += jobsToAdd
+function parseYearMonth(dateStr: string): { year: number; month: number } | null {
+  if (!dateStr) return null;
+  const s = String(dateStr).trim();
+
+  // ISO-like YYYY-MM-DD
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const y = parseInt(iso[1], 10);
+    const m = Math.max(0, Math.min(11, parseInt(iso[2], 10) - 1));
+    return { year: y, month: m };
+  }
+
+  // Slash formats: DD/MM/YYYY or YYYY/MM/DD
+  if (s.includes('/')) {
+    const parts = s.split('/').map(p => p.trim());
+    if (parts.length === 3) {
+      // Heuristic: if first part looks like year (4 digits), treat as YYYY/MM/DD
+      if (/^\d{4}$/.test(parts[0])) {
+        const y = parseInt(parts[0], 10);
+        const m = Math.max(0, Math.min(11, parseInt(parts[1], 10) - 1));
+        return isFinite(y) && isFinite(m) ? { year: y, month: m } : null;
+      } else {
+        // DD/MM/YYYY
+        const y = parseInt(parts[2], 10);
+        const m = Math.max(0, Math.min(11, parseInt(parts[1], 10) - 1));
+        return isFinite(y) && isFinite(m) ? { year: y, month: m } : null;
       }
     }
-  })
-  
-  // Count patents per month using actual dates
-  companyData.forEach(company => {
-    if (company.patents && company.patents.length > 0) {
-      company.patents.forEach(patent => {
-        if (patent.Date) {
-          const month = parseDateMonth(patent.Date)
-          if (month >= 0 && month <= currentMonth) {
-            monthlyPatentCounts[month]++
-          }
-        }
-      })
+  }
+
+  // Month name like "SEP 23, 2025" or "October 17, 2025"
+  const nameRe = /\b([A-Za-z]{3,9})\b[\s\S]*?(19|20)\d{2}/;
+  const mname = s.match(nameRe);
+  if (mname) {
+    const mon = (mname[1] || '').toLowerCase();
+    const y = parseInt(mname[2], 10);
+    const key = mon.slice(0, 3);
+    if (key in MONTH_ABBR) return { year: y, month: MONTH_ABBR[key] };
+  }
+
+  // Fallback: extract year and try to find a month number anywhere
+  const yOnly = s.match(/(19|20)\d{2}/);
+  if (yOnly) {
+    const y = parseInt(yOnly[0], 10);
+    const mNum = s.match(/\b(1[0-2]|0?[1-9])\b/);
+    if (mNum) {
+      const m = Math.max(0, Math.min(11, parseInt(mNum[0], 10) - 1));
+      return { year: y, month: m };
     }
-  })
-  
-  // Count press releases per month using actual dates
+  }
+  return null;
+}
+
+// Return month index [0..11] if the date belongs to the current year; otherwise -1
+function parseDateMonth(dateStr: string): number {
+  const ym = parseYearMonth(dateStr);
+  if (!ym) return -1;
+  const currentYear = new Date().getFullYear();
+  return ym.year === currentYear ? ym.month : -1;
+}
+
+// Helper to generate trend data for current year
+function generateTrendData(companyData: CompanyData[]) {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const currentMonth = new Date().getMonth(); // 0-11
+  const data: { month: string; jobPostings: number; patents: number; pressReleases: number }[] = [];
+
+  const monthlyJobCounts = new Array(12).fill(0);
+  const monthlyPatentCounts = new Array(12).fill(0);
+  const monthlyPressCounts = new Array(12).fill(0);
+
+  // Jobs: use item.Date when parseable; otherwise attribute to current month (represents "current postings")
   companyData.forEach(company => {
-    if (company.news && company.news.length > 0) {
-      company.news.forEach(pressRelease => {
-        if (pressRelease.Date) {
-          const month = parseDateMonth(pressRelease.Date)
-          if (month >= 0 && month <= currentMonth) {
-            monthlyPressCounts[month]++
-          }
-        }
-      })
-    }
-  })
-  
-  // Generate trend data up to current month
+    const jobs = (company.Jobs && company.Jobs.length ? company.Jobs : company.jobListings || []) as JobItem[];
+    if (!jobs || !jobs.length) return;
+    jobs.forEach(j => {
+      const m = j?.Date ? parseDateMonth(j.Date) : -1;
+      const bucket = (m >= 0 && m <= currentMonth) ? m : currentMonth;
+      monthlyJobCounts[bucket] += 1;
+    });
+  });
+
+  // Patents: use normalized YYYY-MM-DD dates from backend when available
+  companyData.forEach(company => {
+    const pats = company.patents || [];
+    pats.forEach(p => {
+      const m = p?.Date ? parseDateMonth(p.Date) : -1;
+      if (m >= 0 && m <= currentMonth) {
+        monthlyPatentCounts[m] += 1;
+      }
+    });
+  });
+
+  // Press releases: use date when parseable; ignore if not current-year
+  companyData.forEach(company => {
+    const news = company.news || [];
+    news.forEach(n => {
+      const m = n?.Date ? parseDateMonth(n.Date) : -1;
+      if (m >= 0 && m <= currentMonth) {
+        monthlyPressCounts[m] += 1;
+      }
+    });
+  });
+
   for (let i = 0; i <= currentMonth; i++) {
     data.push({
       month: months[i],
       jobPostings: monthlyJobCounts[i],
       patents: monthlyPatentCounts[i],
       pressReleases: monthlyPressCounts[i],
-    })
+    });
   }
-  
-  return data
+  return data;
 }
 
 const MARKET_COLORS: Record<string, string> = {
@@ -403,6 +448,11 @@ export default function EyeOnRivalsLanding() {
   const [scrapeMessage, setScrapeMessage] = useState("")
   const [showVideo, setShowVideo] = useState(false)
 
+  // Scraper client orchestrator (start/poll/cancel)
+  const { state: scrapeState, snapshot: scrapeSnapshot, start: startScrape, cancel: cancelScrape } = useScraperClient()
+  const router = useRouter()
+  const overlayOpen = scrapeState === 'starting' || scrapeState === 'running' || scrapeState === 'canceling'
+
   // Market share state (persisted via /api/market-share)
   const [msData, setMsData] = useState<{ name: string; value: number }[]>([])
   const [msUpdatedAt, setMsUpdatedAt] = useState<string | null>(null)
@@ -532,11 +582,44 @@ export default function EyeOnRivalsLanding() {
     return () => { alive = false }
   }, [])
 
+  // Keep GIF/dim overlay visible while scraping states are active; hide when finished
+  useEffect(() => {
+    if (overlayOpen) {
+      setShowVideo(true)
+    } else if (scrapeState.startsWith('done_')) {
+      setShowVideo(false)
+    }
+  }, [overlayOpen, scrapeState])
+
+  // Auto-refresh when the scraper run reaches a terminal state
+  useEffect(() => {
+    const status = scrapeSnapshot?.status
+    if (status === 'done' || status === 'error' || status === 'canceled') {
+      const t = setTimeout(() => {
+        // Revalidate server components and refetch /api/competitors (reads backend/outputData.json)
+        router.refresh()
+      }, 750)
+      return () => clearTimeout(t)
+    }
+  }, [scrapeSnapshot?.status, router])
+
   // Helper to fetch patents for a competitor (case-insensitive)
   function getPatentsFor(name: string): PatentLite[] {
     const entries = Object.entries(patentsByCompany)
     const found = entries.find(([k]) => k.toLowerCase() === name.toLowerCase())
-    return found ? found[1] : []
+    const fromMap = found ? (found[1] as PatentLite[]) : []
+    if (fromMap && fromMap.length) return fromMap
+
+    // Fallback to outputData.json competitor block if dedicated /api/patents data is missing
+    const comp = companyData.find(
+      (c) => c.name.toLowerCase() === name.toLowerCase()
+    )
+    const fallback: PatentLite[] = (comp?.patents ?? []).map((p: any) => ({
+      Title: p?.Title ?? "",
+      Date: p?.Date ?? "",
+      URL: p?.URL ?? "",
+    }))
+    return fallback
   }
 
   const selectedCompany = companyData.find(
@@ -554,40 +637,15 @@ export default function EyeOnRivalsLanding() {
     }))
   }
  
-  // Handle scraper execution
+  // Handle scraper execution (client orchestrator)
   const handleStartMonitoring = async () => {
     setIsScraping(true)
     setShowVideo(true)
     setScrapeMessage("Starting data collection...")
-    
     try {
-      const response = await fetch('/api/scraper', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      
-      const result = await response.json()
-      
-      if (result.success) {
-        setScrapeMessage(`Data collection completed successfully! Used ${result.pythonCommand || 'python'}. Refreshing data...`)
-        // Hide video and refresh data after scraping
-        setTimeout(() => {
-          setShowVideo(false)
-          setTimeout(() => {
-            window.location.reload()
-          }, 500)
-        }, 1000)
-      } else {
-        setScrapeMessage(`Failed to collect data: ${result.message}${result.details ? ` - ${result.details}` : ''}`)
-        setShowVideo(false)
-      }
-    } catch (error) {
-      setScrapeMessage("Failed to start data collection. Please try again.")
-      console.error('Scraper error:', error)
-      setShowVideo(false)
+      await startScrape()
     } finally {
+      // Button re-enabled when overlay closes
       setIsScraping(false)
     }
   }
@@ -700,12 +758,7 @@ export default function EyeOnRivalsLanding() {
     return { name, item }
   })
 
-  // One patent per competitor (first item), to mirror Press Releases widget
-  const patentsEntries: { name: string; item?: PatentLite }[] = pressOrder.map((name) => {
-    const list = getPatentsFor(name)
-    const item = list?.[0]
-    return { name, item }
-  })
+  // Patents are rendered fully per competitor below in a scrollable list (no slicing)
 
   // One job per competitor (first item), to mirror Press Releases widget
   const jobsEntries: { name: string; item?: JobItem }[] = pressOrder.map((name) => {
@@ -875,10 +928,16 @@ export default function EyeOnRivalsLanding() {
                           const atk = computeAttack(computedThreat, patentNum, deviceNum, activityScore);
                           return (
                             <>
-                              <div className="absolute top-2 left-2 bg-black/70 text-white text-xs sm:text-sm font-bold px-2 py-1 rounded">
+                              <div
+                                className="absolute top-4 right-9 text-black text-[10px] sm:text-xs font-extrabold select-none"
+                                style={{ textShadow: "0 0 2px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.8), 1px 0 0 rgba(255,255,255,0.85), -1px 0 0 rgba(255,255,255,0.85), 0 1px 0 rgba(255,255,255,0.85), 0 -1px 0 rgba(255,255,255,0.85)" }}
+                              >
                                 HP {hp}
                               </div>
-                              <div className="absolute top-2 right-2 bg-black/70 text-white text-xs sm:text-sm font-bold px-2 py-1 rounded">
+                              <div
+                                className="absolute top-60 right-4 text-black text-[10px] sm:text-xs font-extrabold select-none"
+                                style={{textShadow: `0 0 2px #fff, 0 0 4px rgba(255,255,255,0.8), 1px 0 0 #fff, -1px 0 0 #fff, 0 1px 0 #fff, 0 -1px 0 #fff`}}
+                              >
                                 ATK {atk}
                               </div>
                             </>
@@ -1125,22 +1184,51 @@ export default function EyeOnRivalsLanding() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {patentsEntries.map(({ name, item }) => (
-                  <div
-                    key={name}
-                    className={`border-l-4 pl-4 ${companyPressBorder(name)}`}
-                  >
-                    <h4 className="font-semibold text-blue-600">
-                      {item ? `${name}. ${item.Title}` : `${name}. No patents available.`}
-                    </h4>
-                    {item && (
-                      <>
-                        <p className="text-xs text-blue-600/80">{item.Date}</p>
-                        <p className="text-xs text-blue-600 break-all">{item.URL}</p>
-                      </>
-                    )}
-                  </div>
-                ))}
+                {pressOrder.map((name) => {
+                  const list = getPatentsFor(name)
+                  const item = list[0]
+                  return (
+                    <div
+                      key={name}
+                      className={`border-l-4 pl-4 ${companyPressBorder(name)}`}
+                    >
+                      <h4 className="font-semibold text-blue-600">
+                        <span>{name}.</span>
+                        <span className="text-xs text-blue-600/60 ml-2">
+                          • {list.length} items
+                        </span>
+                      </h4>
+                      {item ? (
+                        <>
+                          <div className="text-sm text-blue-700 break-words">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium break-words">{item.Title}</span>
+                              {item.Date && (
+                                <span className="text-xs text-blue-600/60">
+                                  {item.Date}
+                                </span>
+                              )}
+                            </div>
+                            {item.URL && (
+                              <a
+                                href={item.URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 underline break-all"
+                              >
+                                {item.URL}
+                              </a>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-sm text-blue-600/60">
+                          No patents available.
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </CardContent>
             </Card>
 
@@ -1158,7 +1246,11 @@ export default function EyeOnRivalsLanding() {
                     className={`border-l-4 pl-4 ${companyPressBorder(name)}`}
                   >
                     <h4 className="font-semibold text-blue-600">
-                      {item ? `${name}. ${item.Headline}` : `${name}. No press releases available.`}
+                      <span>{name}.</span>
+                      <span className="ml-1">{item ? item.Headline : "No press releases available."}</span>
+                      <span className="text-xs text-blue-600/60 ml-2">
+                        • {(companyData.find((c) => c.name.toLowerCase().includes(name.toLowerCase()))?.news?.length) ?? 0} items
+                      </span>
                     </h4>
                     {item && (
                       <>
@@ -1192,7 +1284,11 @@ export default function EyeOnRivalsLanding() {
                     className={`border-l-4 pl-4 ${companyPressBorder(name)}`}
                   >
                     <h4 className="font-semibold text-blue-600">
-                      {item ? `${name}. ${item["Job Title"]}` : `${name}. No job postings available.`}
+                      <span>{name}.</span>
+                      <span className="ml-1">{item ? item["Job Title"] : "No job postings available."}</span>
+                      <span className="text-xs text-blue-600/60 ml-2">
+                        • {(companyData.find((c) => c.name.toLowerCase().includes(name.toLowerCase()))?.Jobs?.length) ?? 0} items
+                      </span>
                     </h4>
                     {item && (
                       <>
@@ -1261,6 +1357,14 @@ export default function EyeOnRivalsLanding() {
           </div>
         </div>
       )}
+
+      {/* Scraper progress overlay panel (sits above the dim+GIF layer) */}
+      <ScrapeOverlay
+        open={overlayOpen}
+        snapshot={scrapeSnapshot}
+        onCancelRequested={cancelScrape}
+        canceling={scrapeState === 'canceling'}
+      />
     </div>
   )
 }

@@ -29,7 +29,7 @@ export async function GET() {
         const filePath = path.join(process.cwd(), "backend", name)
         const content = await fs.readFile(filePath, "utf-8")
         const data: ApiData = JSON.parse(content)
-        return NextResponse.json(data)
+        return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } })
       } catch (e: any) {
         lastErr = e
         continue
@@ -42,9 +42,12 @@ export async function GET() {
           `Failed to load data from backend/outputData.json or backend/DummyJson.json` +
           (lastErr?.message ? `: ${lastErr.message}` : ""),
       },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     )
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message ?? "Failed to load data" }, { status: 500 })
+    return NextResponse.json(
+      { error: error?.message ?? "Failed to load data" },
+      { status: 500, headers: { "Cache-Control": "no-store" } }
+    )
   }
 }
